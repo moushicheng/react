@@ -392,6 +392,7 @@ export function listenToAllSupportedEvents(rootContainerElement: EventTarget) {
       // doesn't bubble and needs to be on the document.
       if (domEventName !== 'selectionchange') {
         if (!nonDelegatedEvents.has(domEventName)) {
+          //不可委托事件
           listenToNativeEvent(domEventName, false, rootContainerElement);
         }
         listenToNativeEvent(domEventName, true, rootContainerElement);
