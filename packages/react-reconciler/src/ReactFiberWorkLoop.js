@@ -660,13 +660,13 @@ export function requestUpdateLane(fiber: Fiber): Lane {
     }
     return currentEventTransitionLane;
   }
-
-  // Updates originating inside certain React methods, like flushSync, have
+  //看这篇https://juejin.cn/post/7032051193371164708
+  // Updates originating(v.来源) inside(内部的) certain(adj.某些的) React methods, like flushSync, have
   // their priority set by tracking it with a context variable.
   //
   // The opaque type returned by the host config is internally a lane, so we can
   // use that directly.
-  // TODO: Move this type conversion to the event priority module.
+  // TODO: Move this type conversion(n.转换) to the event priority module.
   const updateLane: Lane = (getCurrentUpdatePriority(): any);
   if (updateLane !== NoLane) {
     return updateLane;
@@ -865,9 +865,12 @@ export function isUnsafeClassRenderPhaseUpdate(fiber: Fiber): boolean {
 }
 
 // Use this function to schedule a task for a root. There's only one task per
+// 使用这个函数去调度根节点上的任务,每个根节点只有一个任务
 // root; if a task was already scheduled, we'll check to make sure the priority
+// 如果一个任务已经被调度了，我们将检查以确保现有任务的优先级与根进程正在处理的下一层任务的优先级相同。
 // of the existing task is the same as the priority of the next level that the
 // root has work on. This function is called on every update, and right before
+// 此函数在每次更新时，以及在退出任务之前调用。
 // exiting a task.
 function ensureRootIsScheduled(root: FiberRoot, currentTime: number) {
   const existingCallbackNode = root.callbackNode;
@@ -892,7 +895,7 @@ function ensureRootIsScheduled(root: FiberRoot, currentTime: number) {
     return;
   }
 
-  // We use the highest priority lane to represent the priority of the callback.
+  // We use the highest priority(n.优先级) lane to represent(v.表示) the priority of the callback.
   const newCallbackPriority = getHighestPriorityLane(nextLanes);
 
   // Check if there's an existing task. We may be able to reuse it.
@@ -924,16 +927,17 @@ function ensureRootIsScheduled(root: FiberRoot, currentTime: number) {
     // The priority hasn't changed. We can reuse the existing task. Exit.
     return;
   }
-
+  //也就是说，existingCallbackNode的优先级低于newCallback呗，所以要被取消
   if (existingCallbackNode != null) {
     // Cancel the existing callback. We'll schedule a new one below.
     cancelCallback(existingCallbackNode);
   }
 
   // Schedule a new callback.
+  // 调用一个新的回调，大概率可能是根节点对应的调度任务（？
   let newCallbackNode;
   if (includesSyncLane(newCallbackPriority)) {
-    // Special case: Sync React callbacks are scheduled on a special
+    // Special case: Sync React callbacks are scheduled on a special 特殊的case，暂时不用看
     // internal queue
     if (root.tag === LegacyRoot) {
       if (__DEV__ && ReactCurrentActQueue.isBatchingLegacy !== null) {
@@ -990,6 +994,7 @@ function ensureRootIsScheduled(root: FiberRoot, currentTime: number) {
         schedulerPriorityLevel = NormalSchedulerPriority;
         break;
     }
+    //调度回调
     newCallbackNode = scheduleCallback(
       schedulerPriorityLevel,
       performConcurrentWorkOnRoot.bind(null, root),
@@ -1001,7 +1006,7 @@ function ensureRootIsScheduled(root: FiberRoot, currentTime: number) {
 }
 
 // This is the entry point for every concurrent task, i.e. anything that
-// goes through Scheduler.
+// goes through Scheduler.//在Root上执行并发工作
 function performConcurrentWorkOnRoot(root: FiberRoot, didTimeout: boolean) {
   if (enableProfilerTimer && enableProfilerNestedUpdatePhase) {
     resetNestedUpdateFlag();
@@ -1044,10 +1049,10 @@ function performConcurrentWorkOnRoot(root: FiberRoot, didTimeout: boolean) {
     return null;
   }
 
-  // We disable time-slicing in some cases: if the work has been CPU-bound
+  // We disable time-slicing in some cases: if the work has been CPU-bound 我们禁止时间切片在某些情况下:
   // for too long ("expired" work, to prevent starvation), or we're in
   // sync-updates-by-default mode.
-  // TODO: We only check `didTimeout` defensively, to account for a Scheduler
+  // TODO: We only check `didTimeout` defensively, to account for a Scheduler 我们只防御性地检查' didTimeout '，以考虑调度器
   // bug we're still investigating. Once the bug in Scheduler is fixed,
   // we can remove this, since we track expiration ourselves.
   const shouldTimeSlice =
@@ -1142,7 +1147,7 @@ function performConcurrentWorkOnRoot(root: FiberRoot, didTimeout: boolean) {
       // or, if something suspended, wait to commit it after a timeout.
       root.finishedWork = finishedWork;
       root.finishedLanes = lanes;
-      finishConcurrentRender(root, exitStatus, lanes);
+      finishConcurrentRender(root, exitStatus, lanes); //实际渲染逻辑
     }
   }
 
@@ -2027,7 +2032,7 @@ function renderRootSync(root: FiberRoot, lanes: Lanes) {
     }
 
     workInProgressTransitions = getTransitionsForLanes(root, lanes);
-    prepareFreshStack(root, lanes);
+    prepareFreshStack(root, lanes); //这里创建了root.current.alternate 也就是workInProgress
   }
 
   if (__DEV__) {
@@ -2320,6 +2325,7 @@ function performUnitOfWork(unitOfWork: Fiber): void {
   resetCurrentDebugFiberInDEV();
   unitOfWork.memoizedProps = unitOfWork.pendingProps;
   if (next === null) {
+    //beginWork产出不了新子节点后，才会进入归阶段
     // If this doesn't spawn new work, complete the current work.
     completeUnitOfWork(unitOfWork);
   } else {
@@ -2611,7 +2617,7 @@ function commitRootImpl(
     // no more pending effects.
     // TODO: Might be better if `flushPassiveEffects` did not automatically
     // flush synchronous work at the end, to avoid factoring hazards like this.
-    flushPassiveEffects();
+    flushPassiveEffects(); //刷新同步更新队列
   } while (rootWithPendingPassiveEffects !== null);
   flushRenderPhaseStrictModeWarningsInDEV();
 
@@ -2770,8 +2776,8 @@ function commitRootImpl(
       rootCommittingMutationOrLayoutEffects = root;
     }
 
-    // The next phase is the mutation phase, where we mutate the host tree.
-    commitMutationEffects(root, finishedWork, lanes);
+    // The next phase is the mutation phase, where we mutate the host tree. 突变阶段
+    commitMutationEffects(root, finishedWork, lanes); //实际渲染
 
     if (enableCreateEventHandleAPI) {
       if (shouldFireAfterActiveInstanceBlur) {
@@ -2835,7 +2841,7 @@ function commitRootImpl(
   const rootDidHavePassiveEffects = rootDoesHavePassiveEffects;
 
   if (rootDoesHavePassiveEffects) {
-    // This commit has passive effects. Stash a reference to them. But don't
+    // This commit has passive effects. Stash(v.存放) a reference to them. But don't
     // schedule a callback until after flushing layout work.
     rootDoesHavePassiveEffects = false;
     rootWithPendingPassiveEffects = root;
@@ -3032,12 +3038,13 @@ function releaseRootPooledCache(root: FiberRoot, remainingLanes: Lanes) {
 }
 
 export function flushPassiveEffects(): boolean {
-  // Returns whether passive effects were flushed.
+  // Returns whether passive effects were flushed. 返回是否副作用函数被调用
   // TODO: Combine this check with the one in flushPassiveEFfectsImpl. We should
   // probably just combine the two functions. I believe they were only separate
   // in the first place because we used to wrap it with
   // `Scheduler.runWithPriority`, which accepts a function. But now we track the
   // priority within React itself, so we can mutate the variable directly.
+  // 不知道为何rootWithPendingPassiveEffects一般是null
   if (rootWithPendingPassiveEffects !== null) {
     // Cache the root since rootWithPendingPassiveEffects is cleared in
     // flushPassiveEffectsImpl
@@ -3049,7 +3056,7 @@ export function flushPassiveEffects(): boolean {
     pendingPassiveEffectsRemainingLanes = NoLanes;
 
     const renderPriority = lanesToEventPriority(pendingPassiveEffectsLanes);
-    const priority = lowerEventPriority(DefaultEventPriority, renderPriority);
+    const priority = lowerEventPriority(DefaultEventPriority, renderPriority);//a>b?a:b 将低等级任务提升到Default级别
     const prevTransition = ReactCurrentBatchConfig.transition;
     const previousPriority = getCurrentUpdatePriority();
 
@@ -3120,8 +3127,8 @@ function flushPassiveEffectsImpl() {
   const prevExecutionContext = executionContext;
   executionContext |= CommitContext;
 
-  commitPassiveUnmountEffects(root.current);
-  commitPassiveMountEffects(root, root.current, lanes, transitions);
+  commitPassiveUnmountEffects(root.current); //提交卸载副作用函数
+  commitPassiveMountEffects(root, root.current, lanes, transitions);//提交挂载副作用函数
 
   // TODO: Move to commitPassiveMountEffects
   if (enableProfilerTimer && enableProfilerCommitHooks) {
@@ -3758,6 +3765,7 @@ if (__DEV__ && replayFailedUnitOfWorkWithInvokeGuardedCallback) {
 
     // Before entering the begin phase, copy the work-in-progress onto a dummy
     // fiber. If beginWork throws, we'll use this to reset the state.
+    // 就是复制workInProgress以避免更新出错时找不回原状态
     const originalWorkInProgressCopy = assignFiberPropertiesInDEV(
       dummyFiber,
       unitOfWork,
@@ -3785,7 +3793,7 @@ if (__DEV__ && replayFailedUnitOfWorkWithInvokeGuardedCallback) {
       resetSuspendedWorkLoopOnUnwind();
       unwindInterruptedWork(current, unitOfWork, workInProgressRootRenderLanes);
 
-      // Restore the original properties of the fiber.
+      // Restore the original properties of the fiber. 因为一开始copy了fiber的拷贝，所以有机会恢复他
       assignFiberPropertiesInDEV(unitOfWork, originalWorkInProgressCopy);
 
       if (enableProfilerTimer && unitOfWork.mode & ProfileMode) {

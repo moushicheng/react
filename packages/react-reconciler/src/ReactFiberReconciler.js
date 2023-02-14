@@ -330,12 +330,13 @@ export function updateContainer(
   }
   const current = container.current;
   const eventTime = requestEventTime();
+  //获取当前更新事件的优先级
   const lane = requestUpdateLane(current);
 
   if (enableSchedulingProfiler) {
     markRenderScheduled(lane);
   }
-
+  //对于根组件来说，由于没有parentComponent，所以context为{}
   const context = getContextForSubtree(parentComponent);
   if (container.context === null) {
     container.context = context;
@@ -378,11 +379,11 @@ export function updateContainer(
     }
     update.callback = callback;
   }
-
+  //Update更新逻辑入队，感觉就是跟react的异步更新有关
   const root = enqueueUpdate(current, update, lane);
   if (root !== null) {
-    scheduleUpdateOnFiber(root, current, lane, eventTime);
-    entangleTransitions(root, current, lane);
+    scheduleUpdateOnFiber(root, current, lane, eventTime); //在fiber中调度更新
+    entangleTransitions(root, current, lane); //transitions逻辑处理，先不管
   }
 
   return lane;

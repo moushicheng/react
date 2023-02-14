@@ -234,7 +234,7 @@ function workLoop(hasTimeRemaining: boolean, initialTime: number) {
         // $FlowFixMe[incompatible-call] found when upgrading Flow
         markTaskRun(currentTask, currentTime);
       }
-      const continuationCallback = callback(didUserCallbackTimeout);
+      const continuationCallback = callback(didUserCallbackTimeout); //单个任务在执行时被打断会返回continuationCallback
       currentTime = getCurrentTime();
       if (typeof continuationCallback === 'function') {
         // If a continuation is returned, immediately yield to the main thread
@@ -350,6 +350,7 @@ function unstable_scheduleCallback(
 ): Task {
   var currentTime = getCurrentTime();
 
+  //计算startTime，实际逻辑就是:startTime=currentTime+?delay
   var startTime;
   if (typeof options === 'object' && options !== null) {
     var delay = options.delay;
@@ -395,13 +396,14 @@ function unstable_scheduleCallback(
   if (enableProfiling) {
     newTask.isQueued = false;
   }
-
+  // 如果是延时任务，将其放到 timerQueue
   if (startTime > currentTime) {
     // This is a delayed task.
-    newTask.sortIndex = startTime;
+    newTask.sortIndex = startTime; //按延时时间在timerQueue中排序
     push(timerQueue, newTask);
     if (peek(taskQueue) === null && newTask === peek(timerQueue)) {
       // All tasks are delayed, and this is the task with the earliest delay.
+      // 任务列表空了，而这就是最早的 delay 任务
       if (isHostTimeoutScheduled) {
         // Cancel an existing timeout.
         cancelHostTimeout();
@@ -409,16 +411,18 @@ function unstable_scheduleCallback(
         isHostTimeoutScheduled = true;
       }
       // Schedule a timeout.
-      requestHostTimeout(handleTimeout, startTime - currentTime);
+      // 安排调度
+      requestHostTimeout(handleTimeout, startTime - currentTime); //startTime-currentTime=delay，这分明就只是delay。
     }
   } else {
-    newTask.sortIndex = expirationTime;
+    // 如果是普通任务，就将其放到 taskQueue
+    newTask.sortIndex = expirationTime; //按过期时间在timerQueue中排序
     push(taskQueue, newTask);
     if (enableProfiling) {
       markTaskStart(newTask, currentTime);
       newTask.isQueued = true;
     }
-    // Schedule a host callback, if needed. If we're already performing work,
+    // Schedule a host callback, if needed. If we're already performing(履行.执行) work,
     // wait until the next time we yield.
     if (!isHostCallbackScheduled && !isPerformingWork) {
       isHostCallbackScheduled = true;

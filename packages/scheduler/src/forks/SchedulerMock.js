@@ -219,7 +219,7 @@ function workLoop(hasTimeRemaining: boolean, initialTime: number): boolean {
         // $FlowFixMe[incompatible-call] found when upgrading Flow
         markTaskRun(currentTask, currentTime);
       }
-      const continuationCallback = callback(didUserCallbackTimeout);
+      const continuationCallback = callback(didUserCallbackTimeout);  //单个任务在执行时被打断会返回continuationCallback
       currentTime = getCurrentTime();
       if (typeof continuationCallback === 'function') {
         // If a continuation is returned, immediately yield to the main thread
@@ -343,7 +343,7 @@ function unstable_scheduleCallback(
 ): Task {
   var currentTime = getCurrentTime();
 
-  var startTime;
+  var startTime;  //计算startTime，实际逻辑就是:startTime=currentTime+?delay
   if (typeof options === 'object' && options !== null) {
     var delay = options.delay;
     if (typeof delay === 'number' && delay > 0) {
@@ -388,13 +388,14 @@ function unstable_scheduleCallback(
   if (enableProfiling) {
     newTask.isQueued = false;
   }
-
+  // 如果是延时任务，将其放到 timerQueue
   if (startTime > currentTime) {
     // This is a delayed task.
-    newTask.sortIndex = startTime;
-    push(timerQueue, newTask);
+    newTask.sortIndex = startTime; //按延时时间在timerQueue中排序
+    push(timerQueue, newTask); //不仅push，还按sortIndex排序，其实就是最小堆
     if (peek(taskQueue) === null && newTask === peek(timerQueue)) {
       // All tasks are delayed, and this is the task with the earliest delay.
+      // 任务列表空了，而这就是最早的 delay 任务
       if (isHostTimeoutScheduled) {
         // Cancel an existing timeout.
         cancelHostTimeout();
@@ -402,6 +403,7 @@ function unstable_scheduleCallback(
         isHostTimeoutScheduled = true;
       }
       // Schedule a timeout.
+       // 安排调度
       requestHostTimeout(handleTimeout, startTime - currentTime);
     }
   } else {

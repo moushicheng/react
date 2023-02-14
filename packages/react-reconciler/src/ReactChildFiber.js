@@ -1206,7 +1206,7 @@ function createChildReconciler(
     } else {
       const created = createFiberFromElement(element, returnFiber.mode, lanes);
       created.ref = coerceRef(returnFiber, currentFirstChild, element);
-      created.return = returnFiber;
+      created.return = returnFiber; //returnFiber其实就是父fiber
       return created;
     }
   }
@@ -1277,8 +1277,8 @@ function createChildReconciler(
     if (typeof newChild === 'object' && newChild !== null) {
       switch (newChild.$$typeof) {
         case REACT_ELEMENT_TYPE:
-          return placeSingleChild(
-            reconcileSingleElement(
+          return placeSingleChild( //placeSingleChild会处理flags
+            reconcileSingleElement( //这里会生成元素Fiber
               returnFiber,
               currentFirstChild,
               newChild,

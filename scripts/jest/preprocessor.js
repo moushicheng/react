@@ -55,7 +55,7 @@ const babelOptions = {
   ],
   retainLines: true,
 };
-
+console.log('\n@process.env.JEST_ENABLE_SOURCE_MAPS', process.env.JEST_ENABLE_SOURCE_MAPS);
 module.exports = {
   process: function(src, filePath) {
     if (filePath.match(/\.css$/)) {

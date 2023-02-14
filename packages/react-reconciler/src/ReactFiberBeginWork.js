@@ -337,6 +337,9 @@ export function reconcileChildren(
 
     // If we had any progressed work already, that is invalid at this point so
     // let's throw it out.
+    // 对于第一次挂载，workInProgess是rootFiber的情况会走这里，因为对于rootFiber，react会挂载一个空current上去，为了让rootFiber走这
+    // 而rootFiber所有的子节点都不会走这
+    // 这是为了错开逻辑，让rootFiber.child.flags挂载上Placement这个flags
     workInProgress.child = reconcileChildFibers(
       workInProgress,
       current.child,
@@ -3935,7 +3938,7 @@ function attemptEarlyBailoutIfNoScheduledUpdate(
   }
   return bailoutOnAlreadyFinishedWork(current, workInProgress, renderLanes);
 }
-
+//@mark beginWork
 function beginWork(
   current: Fiber | null,
   workInProgress: Fiber,
@@ -3958,7 +3961,7 @@ function beginWork(
       );
     }
   }
-
+  //对应vue，我们知道current其实是旧vnode，而workInProgress是新vnode
   if (current !== null) {
     const oldProps = current.memoizedProps;
     const newProps = workInProgress.pendingProps;
@@ -3969,12 +3972,14 @@ function beginWork(
       // Force a re-render if the implementation changed due to hot reload:
       (__DEV__ ? workInProgress.type !== current.type : false)
     ) {
+      //进入这里代表olbProps!==newProps或者workInProgress.type!==current.type,应该是需要更新的意思
       // If props or context changed, mark the fiber as having performed work.
       // This may be unset if the props are determined to be equal later (memo).
       didReceiveUpdate = true;
     } else {
       // Neither props nor legacy context changes. Check if there's a pending
       // update or context change.
+      //貌似在某些case下，react第一次挂载时current也是存在的,其实就是rootFiber！
       const hasScheduledUpdateOrContext = checkScheduledUpdateOrContext(
         current,
         renderLanes,
@@ -3999,6 +4004,7 @@ function beginWork(
         didReceiveUpdate = true;
       } else {
         // An update was scheduled on this fiber, but there are no new props
+        //一个已经被计划好的更新在当前fiber中，但是这里没有新的props或者legacy context
         // nor legacy context. Set this to false. If an update queue or context
         // consumer produces a changed value, it will set this to true. Otherwise,
         // the component will assume the children have not changed and bail out.
@@ -4006,6 +4012,7 @@ function beginWork(
       }
     }
   } else {
+    //进入这里就是发现olbProps==newProps且tag相同，就是不需要更新了，所以给出一个false
     didReceiveUpdate = false;
 
     if (getIsHydrating() && isForkedChild(workInProgress)) {
