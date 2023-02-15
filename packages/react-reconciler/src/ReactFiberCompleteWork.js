@@ -1094,6 +1094,7 @@ function completeWork(
             currentHostContext,
             workInProgress,
           );
+          //增加所有appendAllChildren到当前父fiber的dom下
           appendAllChildren(instance, workInProgress, false, false);
           workInProgress.stateNode = instance;
 

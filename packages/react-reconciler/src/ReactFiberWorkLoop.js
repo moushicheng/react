@@ -1147,7 +1147,7 @@ function performConcurrentWorkOnRoot(root: FiberRoot, didTimeout: boolean) {
       // or, if something suspended, wait to commit it after a timeout.
       root.finishedWork = finishedWork;
       root.finishedLanes = lanes;
-      finishConcurrentRender(root, exitStatus, lanes); //实际渲染逻辑
+      finishConcurrentRender(root, exitStatus, lanes); 
     }
   }
 
@@ -2319,7 +2319,7 @@ function performUnitOfWork(unitOfWork: Fiber): void {
     next = beginWork(current, unitOfWork, renderLanes);
     stopProfilerTimerIfRunningAndRecordDelta(unitOfWork, true);
   } else {
-    next = beginWork(current, unitOfWork, renderLanes);
+    next = beginWork(current, unitOfWork, renderLanes); //begin返回子元素
   }
 
   resetCurrentDebugFiberInDEV();
@@ -2329,10 +2329,11 @@ function performUnitOfWork(unitOfWork: Fiber): void {
     // If this doesn't spawn new work, complete the current work.
     completeUnitOfWork(unitOfWork);
   } else {
-    workInProgress = next;
+    workInProgress = next; //设置下一个递归项为子fiber
   }
 
   ReactCurrentOwner.current = null;
+  //接下来会继续在workloop中循环
 }
 
 function replaySuspendedUnitOfWork(unitOfWork: Fiber): void {
@@ -2561,12 +2562,12 @@ function completeUnitOfWork(unitOfWork: Fiber): void {
     const siblingFiber = completedWork.sibling;
     if (siblingFiber !== null) {
       // If there is more work to do in this returnFiber, do that next.
-      workInProgress = siblingFiber;
+      workInProgress = siblingFiber;//如果有兄弟节点，就继续往兄弟节点进行complete阶段
       return;
     }
     // Otherwise, return to the parent
     // $FlowFixMe[incompatible-type] we bail out when we get a null
-    completedWork = returnFiber;
+    completedWork = returnFiber; //下一次就往父节点递归了。
     // Update the next thing we're working on in case something throws.
     workInProgress = completedWork;
   } while (completedWork !== null);
@@ -3757,7 +3758,7 @@ export function warnAboutUpdateOnNotYetMountedFiberInDEV(fiber: Fiber) {
 
 let beginWork;
 if (__DEV__ && replayFailedUnitOfWorkWithInvokeGuardedCallback) {
-  const dummyFiber = null;
+  const dummyFiber = null; 
   beginWork = (current: null | Fiber, unitOfWork: Fiber, lanes: Lanes) => {
     // If a component throws an error, we replay it again in a synchronously
     // dispatched event, so that the debugger will treat it as an uncaught

@@ -35,8 +35,7 @@ describe('ReactDOMRoot', () => {
   it('renders children', () => {
     const root = ReactDOMClient.createRoot(container);
     root.render(<div>
-      Hi
-      <p>233</p>
+      <h1>1</h1>
     </div>);
     Scheduler.unstable_flushAll();
     // expect(container.textContent).toEqual('Hi');
