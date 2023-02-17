@@ -413,7 +413,7 @@ function commitBeforeMutationEffects_complete() {
     const fiber = nextEffect;
     setCurrentDebugFiberInDEV(fiber);
     try {
-      commitBeforeMutationEffectsOnFiber(fiber);
+      commitBeforeMutationEffectsOnFiber(fiber); //调度getSnapshotBeforeMutation生命周期钩子
     } catch (error) {
       captureCommitPhaseError(fiber, fiber.return, error);
     }
@@ -622,7 +622,7 @@ function commitHookEffectListUnmount(
 
 function commitHookEffectListMount(flags: HookFlags, finishedWork: Fiber) {
   const updateQueue: FunctionComponentUpdateQueue | null = (finishedWork.updateQueue: any);
-  const lastEffect = updateQueue !== null ? updateQueue.lastEffect : null;
+  const lastEffect = updateQueue !== null ? updateQueue.lastEffect : null; //effectList的一环，存储副作用的
   if (lastEffect !== null) {
     const firstEffect = lastEffect.next;
     let effect = firstEffect;
@@ -1042,6 +1042,7 @@ function commitLayoutEffectOnFiber(
     case FunctionComponent:
     case ForwardRef:
     case SimpleMemoComponent: {
+      //递归得遍历LayoutEffects
       recursivelyTraverseLayoutEffects(
         finishedRoot,
         finishedWork,

@@ -1147,11 +1147,11 @@ function performConcurrentWorkOnRoot(root: FiberRoot, didTimeout: boolean) {
       // or, if something suspended, wait to commit it after a timeout.
       root.finishedWork = finishedWork;
       root.finishedLanes = lanes;
-      finishConcurrentRender(root, exitStatus, lanes); 
+      finishConcurrentRender(root, exitStatus, lanes); //commmit 阶段
     }
   }
 
-  ensureRootIsScheduled(root, now());
+  ensureRootIsScheduled(root, now()); //为什么要再走一次渲染流程？
   if (root.callbackNode === originalCallbackNode) {
     // The task node scheduled for this root is the same one that's
     // currently executed. Need to return a continuation.
@@ -2618,7 +2618,7 @@ function commitRootImpl(
     // no more pending effects.
     // TODO: Might be better if `flushPassiveEffects` did not automatically
     // flush synchronous work at the end, to avoid factoring hazards like this.
-    flushPassiveEffects(); //刷新同步更新队列
+    flushPassiveEffects(); // 触发useEffect回调与其他同步任务。由于这些任务可能触发新的渲染，所以这里要一直遍历执行直到没有任务
   } while (rootWithPendingPassiveEffects !== null);
   flushRenderPhaseStrictModeWarningsInDEV();
 
@@ -2760,6 +2760,9 @@ function commitRootImpl(
     // The first phase a "before mutation" phase. We use this phase to read the
     // state of the host tree right before we mutate it. This is where
     // getSnapshotBeforeUpdate is called.
+    // before mutation阶段，这一阶段具体做的事情还得细致研究，代码和react16有出入
+    // 可以确认的事：getSnapshotBeforeUpdate 生命周期钩子在此处被调用
+    // 该阶段好像主要是用于读取页面改变前的状态，并提供给用户
     const shouldFireAfterActiveInstanceBlur = commitBeforeMutationEffects(
       root,
       finishedWork,
@@ -2777,8 +2780,8 @@ function commitRootImpl(
       rootCommittingMutationOrLayoutEffects = root;
     }
 
-    // The next phase is the mutation phase, where we mutate the host tree. 突变阶段
-    commitMutationEffects(root, finishedWork, lanes); //实际渲染
+    // The next phase is the mutation phase, where we mutate the host tree. 
+    commitMutationEffects(root, finishedWork, lanes); //before mutation -> mutation
 
     if (enableCreateEventHandleAPI) {
       if (shouldFireAfterActiveInstanceBlur) {
@@ -2838,7 +2841,7 @@ function commitRootImpl(
       recordCommitTime();
     }
   }
-
+  //处理useEffects，赋值EffectList交由异步事件flushPassiveEffects来处理
   const rootDidHavePassiveEffects = rootDoesHavePassiveEffects;
 
   if (rootDoesHavePassiveEffects) {

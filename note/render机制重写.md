@@ -1,3 +1,4 @@
+# react18渲染流程
 ## test case
 ```javascript
   it('renders children', () => {
@@ -43,7 +44,7 @@ rootFiber是组件的根Fiber，而alternate指向的两个fiber树互为新旧f
 ## render的详细流程
 
 
-## flags
+## 引子-fiber上的flags属性
 fiber上的flags属性决定其对应的dom要做何操作
 比如
 ```js
@@ -95,4 +96,122 @@ reconcileSingleElement会创建单一的元素Element
 可以再回顾一下上面的root Fiber tree图，在最开始rootFiber是走update流程
 所以它的child的flags会被设置为Placement
 而其他孙元素不会附上Placement。
+这就意味着，最终打上“请把这个fiber对应的dom插入到页面上”的只有rootFiber
 
+## render流程
+渲染主要分为几个大流程
+1.生成fiber -- beginWork
+2.生成dom   -- completeWork
+3.处理副作用 -- commit阶段
+
+## beginWork
+
+## completeWork
+
+## commit
+
+### beforemutation阶段
+
+
+### mutation阶段
+Dom彻底渲染完成
+
+### layout阶段
+先看官方的解释
+```javascript
+    // The next phase is the layout phase, where we call effects that read
+    // the host tree after it's been mutated. The idiomatic use case for this is
+    // layout, but class component lifecycles also fire here for legacy reasons.
+    commitLayoutEffects(finishedWork, root, lanes);
+    //....
+    export function commitLayoutEffects(
+      finishedWork: Fiber,
+      root: FiberRoot,
+      committedLanes: Lanes,
+    ): void {
+      inProgressLanes = committedLanes;
+      inProgressRoot = root;
+
+      const current = finishedWork.alternate;
+      commitLayoutEffectOnFiber(root, current, finishedWork, committedLanes);
+
+      inProgressLanes = null;
+      inProgressRoot = null;
+    }    
+```
+翻译：下一个阶段是layout阶段，该阶段我们会调用在dom树发生变化之后的effects。这里常见触发的钩子是“布局”但是一些class组建的生命周期也会在此处因为一些原因而触发。
+根据注释我们知道
+该阶段
+1.会处理effects
+2.会处理一些生命周期钩子
+
+#### commitLayoutEffectOnFiber
+commitLayoutEffectOnFiber方法会根据fiber.tag对不同类型的节点分别处理。
+比如函数式组件：
+```javascript
+  switch (finishedWork.tag) {
+    case FunctionComponent:
+    case ForwardRef:
+    case SimpleMemoComponent: {
+      recursivelyTraverseLayoutEffects(
+        finishedRoot,
+        finishedWork,
+        committedLanes,
+      );
+      if (flags & Update) {
+        commitHookLayoutEffects(finishedWork, HookLayout | HookHasEffect);
+      }
+      break;
+    }
+```
+
+#### recursivelyTraverseLayoutEffects
+递归地遍历LayoutEffects
+```javascript
+function recursivelyTraverseLayoutEffects(
+  root: FiberRoot,
+  parentFiber: Fiber,
+  lanes: Lanes,
+) {
+  const prevDebugFiber = getCurrentDebugFiberInDEV();
+  if (parentFiber.subtreeFlags & LayoutMask) {
+    let child = parentFiber.child;
+    while (child !== null) {
+      setCurrentDebugFiberInDEV(child);
+      const current = child.alternate;
+      commitLayoutEffectOnFiber(root, current, child, lanes);
+      child = child.sibling;
+    }
+  }
+  setCurrentDebugFiberInDEV(prevDebugFiber);
+}
+```
+其实就是层序遍历子fiber，给每个fiber再走一遍layout阶段
+所以，这里不是核心流程,他只负责起一个递归的作用，对于函数式组件，
+起主要工作如下
+```js
+     commitHookLayoutEffects(finishedWork, HookLayout | HookHasEffect);
+     //...
+    function commitHookLayoutEffects(finishedWork: Fiber, hookFlags: HookFlags) {
+      // At this point layout effects have already been destroyed (during mutation phase).
+      // This is done to prevent sibling component effects from interfering with each other,
+      // e.g. a destroy function in one component should never override a ref set
+      // by a create function in another component during the same commit.
+      if (shouldProfile(finishedWork)) {
+        try {
+          startLayoutEffectTimer();
+          commitHookEffectListMount(hookFlags, finishedWork);
+        } catch (error) {
+          captureCommitPhaseError(finishedWork, finishedWork.return, error);
+        }
+        recordLayoutEffectDuration(finishedWork);
+      } else {
+        try {
+          // 执行useLayoutEffect的回调函数
+          commitHookEffectListMount(hookFlags, finishedWork);
+        } catch (error) {
+          captureCommitPhaseError(finishedWork, finishedWork.return, error);
+        }
+      }
+    }
+```
