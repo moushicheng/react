@@ -380,6 +380,7 @@ export function commitBeforeMutationEffects(
 
 function commitBeforeMutationEffects_begin() {
   while (nextEffect !== null) {
+    //经典react递归式遍历，这里是递归当前层级的fiber的子fiber
     const fiber = nextEffect;
 
     // This phase is only used for beforeActiveInstanceBlur.
@@ -400,6 +401,7 @@ function commitBeforeMutationEffects_begin() {
       (fiber.subtreeFlags & BeforeMutationMask) !== NoFlags &&
       child !== null
     ) {
+      //某种情况下直接跳过当前fiber，走其子fiber
       child.return = fiber;
       nextEffect = child;
     } else {
@@ -410,6 +412,7 @@ function commitBeforeMutationEffects_begin() {
 
 function commitBeforeMutationEffects_complete() {
   while (nextEffect !== null) {
+    //经典react递归试遍历，这里是遍历当前层级的fiber
     const fiber = nextEffect;
     setCurrentDebugFiberInDEV(fiber);
     try {
@@ -419,7 +422,7 @@ function commitBeforeMutationEffects_complete() {
     }
     resetCurrentDebugFiberInDEV();
 
-    const sibling = fiber.sibling;
+    const sibling = fiber.sibling; 
     if (sibling !== null) {
       sibling.return = fiber.return;
       nextEffect = sibling;
@@ -458,6 +461,8 @@ function commitBeforeMutationEffectsOnFiber(finishedWork: Fiber) {
     case FunctionComponent: {
       if (enableUseEffectEventHook) {
         if ((flags & Update) !== NoFlags) {
+          //函数式组件一定不会调用getSnapshotBeforeUpdate
+          //但它具体做了什么，暂时难以看出逻辑
           commitUseEffectEventMount(finishedWork);
         }
       }
@@ -621,8 +626,12 @@ function commitHookEffectListUnmount(
 }
 
 function commitHookEffectListMount(flags: HookFlags, finishedWork: Fiber) {
-  const updateQueue: FunctionComponentUpdateQueue | null = (finishedWork.updateQueue: any);
+  // effectList，专门存effect的
+  // 但注意，某些情况下react喜欢把fiber叫做xxxEffect（比如nextEffect）
+  // 也不知道是为什么
+  const updateQueue: FunctionComponentUpdateQueue | null = (finishedWork.updateQueue: any);/
   const lastEffect = updateQueue !== null ? updateQueue.lastEffect : null; //effectList的一环，存储副作用的
+  // 遍历当前fiber上绑定的所有effects，effects由effectlist（链表结构）构建
   if (lastEffect !== null) {
     const firstEffect = lastEffect.next;
     let effect = firstEffect;
@@ -637,7 +646,7 @@ function commitHookEffectListMount(flags: HookFlags, finishedWork: Fiber) {
         }
 
         // Mount
-        const create = effect.create;
+        const create = effect.create; 
         if (__DEV__) {
           if ((flags & HookInsertion) !== NoHookEffect) {
             setIsRunningInsertionEffect(true);
@@ -695,7 +704,7 @@ function commitHookEffectListMount(flags: HookFlags, finishedWork: Fiber) {
               addendum = ' You returned: ' + destroy;
             }
             console.error(
-              '%s must not return anything besides a function, ' +
+              '%s ust not return anything besides a function,' +
                 'which is used for clean-up.%s',
               hookName,
               addendum,
@@ -1922,6 +1931,7 @@ function insertOrAppendPlacementNode(
 // deleted subtree.
 // TODO: Update these during the whole mutation phase, not just during
 // a deletion.
+// 当我们递归遍历已删除的子树时，在堆栈上跟踪这些子树。注意事项:在整个突变阶段更新这些，而不仅仅是在删除期间。
 let hostParent: Instance | Container | null = null;
 let hostParentIsContainer: boolean = false;
 
@@ -1931,11 +1941,14 @@ function commitDeletionEffects(
   deletedFiber: Fiber,
 ) {
   if (supportsMutation) {
-    // We only have the top Fiber that was deleted but we need to recurse down its
+    // suportsMutation是react处理Dom的经典模式
+    // We only have the top Fiber that was deleted but we need to recurse down【向下递归】 its
     // children to find all the terminal nodes.
 
     // Recursively delete all host nodes from the parent, detach refs, clean
     // up mounted layout effects, and call componentWillUnmount.
+    // 递归删除父节点下的所有原生节点，并分离refs，清理挂在在其上的layoutEffect，
+    // 和调用 componentWillUnmount钩子
 
     // We only need to remove the topmost host child in each branch. But then we
     // still need to keep traversing to unmount effects, refs, and cWU. TODO: We
@@ -2489,7 +2502,8 @@ function recursivelyTraverseMutationEffects(
   lanes: Lanes,
 ) {
   // Deletions effects can be scheduled on any fiber type. They need to happen
-  // before the children effects hae fired.
+  // before the children effects hae fired. 
+  // 该函数的主要职责是卸载所有需要卸载的子树上的卸载项（refs，一些钩子，触发componentWillUnmount事件等等）
   const deletions = parentFiber.deletions;
   if (deletions !== null) {
     for (let i = 0; i < deletions.length; i++) {
@@ -2504,6 +2518,7 @@ function recursivelyTraverseMutationEffects(
 
   const prevDebugFiber = getCurrentDebugFiberInDEV();
   if (parentFiber.subtreeFlags & MutationMask) {
+    //subtreeFlags记录的是子树的flags集合？所以要和mutationsMask做比较操作
     let child = parentFiber.child;
     while (child !== null) {
       setCurrentDebugFiberInDEV(child);
@@ -2530,8 +2545,8 @@ function commitMutationEffectsOnFiber(
     case ForwardRef:
     case MemoComponent:
     case SimpleMemoComponent: {
-      recursivelyTraverseMutationEffects(root, finishedWork, lanes);
-      commitReconciliationEffects(finishedWork);
+      recursivelyTraverseMutationEffects(root, finishedWork, lanes);//插入前先卸载
+      commitReconciliationEffects(finishedWork); //处理Placement，执行页面插入操作
 
       if (flags & Update) {
         try {
@@ -2644,6 +2659,7 @@ function commitMutationEffectsOnFiber(
     }
     // eslint-disable-next-line-no-fallthrough
     case HostComponent: {
+      // 原生组件的含义代表的是浏览器环境下的组件，如div，span，p
       recursivelyTraverseMutationEffects(root, finishedWork, lanes);
       commitReconciliationEffects(finishedWork);
 
@@ -2954,6 +2970,7 @@ function commitReconciliationEffects(finishedWork: Fiber) {
   // Placement effects (insertions, reorders) can be scheduled on any fiber
   // type. They needs to happen after the children effects have fired, but
   // before the effects on this fiber have fired.
+  // 处理事件（dom插入页面）
   const flags = finishedWork.flags;
   if (flags & Placement) {
     try {

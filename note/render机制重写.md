@@ -110,11 +110,50 @@ reconcileSingleElement会创建单一的元素Element
 
 ## commit
 
+在beforeMutaion之前最重要的操作就是调度useEffect，flushPassiveEffects会执行useEffect cb，其执行时机在异步。
+```javascript
+    if ((effectTag & Passive) !== NoEffect) {
+      if (!rootDoesHavePassiveEffects) {
+        rootDoesHavePassiveEffects = true;
+        scheduleCallback(NormalSchedulerPriority, () => {
+          flushPassiveEffects();
+          return null;
+        });
+      }
+    }
+```
 ### beforemutation阶段
-
+Dom渲染前的操作
+主要做了一件事，递归式遍历整个EffectList的fiber节点树并执行一定的操作
+并调用
+```js
+commitBeforeMutationEffectsOnFiber()
+```
+它会调用ClassComponent上的getSnapshotBeforeUpdate并传入当前节点的snapshot。
+具体逻辑不必细聊，毕竟都是functionCompoent的时代了 ，且getSnapshotBeforeUpdate钩子只会在classcomponent调用。
 
 ### mutation阶段
-Dom彻底渲染完成
+这里可以大讲特讲，因为其是Dom渲染的核心，
+其入口函数是
+```javascript
+export function commitMutationEffects(
+  root: FiberRoot,
+  finishedWork: Fiber,
+  committedLanes: Lanes,
+) {
+  inProgressLanes = committedLanes;
+  inProgressRoot = root;
+
+  setCurrentDebugFiberInDEV(finishedWork);
+  commitMutationEffectsOnFiber(finishedWork, root, committedLanes);
+  setCurrentDebugFiberInDEV(finishedWork);
+
+  inProgressLanes = null;
+  inProgressRoot = null;
+}
+```
+关键在于执行了commitMutationEffectsOnFiber，
+记住xxxxOnfiber在react上的抽象含义是对具体的Fiber执行xxx操作，比如这里的含义就是“在具体的Fiber上执行commitMutationEffects操作”
 
 ### layout阶段
 先看官方的解释
@@ -144,10 +183,11 @@ Dom彻底渲染完成
 该阶段
 1.会处理effects
 2.会处理一些生命周期钩子
+从资料中我们也可以知道:该阶段触发的生命周期钩子和hoo·k可以直接访问到已经改变后的DOM，即该阶段是可以参与DOM layout的阶段。
 
 #### commitLayoutEffectOnFiber
 commitLayoutEffectOnFiber方法会根据fiber.tag对不同类型的节点分别处理。
-比如函数式组件：
+举个🌰函数式组件的分支逻辑：
 ```javascript
   switch (finishedWork.tag) {
     case FunctionComponent:
@@ -159,14 +199,13 @@ commitLayoutEffectOnFiber方法会根据fiber.tag对不同类型的节点分别�
         committedLanes,
       );
       if (flags & Update) {
-        commitHookLayoutEffects(finishedWork, HookLayout | HookHasEffect);
+        commitHookLayoutEffects(finishedWork, HookLayout | HookHasEffect);//核心工作
       }
       break;
     }
 ```
-
 #### recursivelyTraverseLayoutEffects
-递归地遍历LayoutEffects
+该函数名：递归地遍历LayoutEffects,我们也能略知一二
 ```javascript
 function recursivelyTraverseLayoutEffects(
   root: FiberRoot,
@@ -179,7 +218,7 @@ function recursivelyTraverseLayoutEffects(
     while (child !== null) {
       setCurrentDebugFiberInDEV(child);
       const current = child.alternate;
-      commitLayoutEffectOnFiber(root, current, child, lanes);
+      commitLayoutEffectOnFiber(root, current, child, lanes);//继续遍历之前的流程
       child = child.sibling;
     }
   }
@@ -188,7 +227,7 @@ function recursivelyTraverseLayoutEffects(
 ```
 其实就是层序遍历子fiber，给每个fiber再走一遍layout阶段
 所以，这里不是核心流程,他只负责起一个递归的作用，对于函数式组件，
-起主要工作如下
+其主要工作是位于commitLayoutEffectOnFiber的 commitHookLayoutEffects，如下：
 ```js
      commitHookLayoutEffects(finishedWork, HookLayout | HookHasEffect);
      //...
@@ -198,20 +237,12 @@ function recursivelyTraverseLayoutEffects(
       // e.g. a destroy function in one component should never override a ref set
       // by a create function in another component during the same commit.
       if (shouldProfile(finishedWork)) {
-        try {
-          startLayoutEffectTimer();
-          commitHookEffectListMount(hookFlags, finishedWork);
-        } catch (error) {
-          captureCommitPhaseError(finishedWork, finishedWork.return, error);
-        }
-        recordLayoutEffectDuration(finishedWork);
+        //...
       } else {
-        try {
           // 执行useLayoutEffect的回调函数
           commitHookEffectListMount(hookFlags, finishedWork);
-        } catch (error) {
-          captureCommitPhaseError(finishedWork, finishedWork.return, error);
-        }
       }
     }
 ```
+#### 总结
+综上我们可以总结：对于函数试组件，react会递归的遍历其fiber子节点并调用其上的useLayoutEffect
