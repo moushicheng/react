@@ -397,14 +397,16 @@ function commitBeforeMutationEffects_begin() {
     }
 
     const child = fiber.child;
+    // 现在的react会在创建fiber阶段打上flags标签，并配合
     if (
       (fiber.subtreeFlags & BeforeMutationMask) !== NoFlags &&
       child !== null
     ) {
-      //某种情况下直接跳过当前fiber，走其子fiber
+      //子fiber可递归就继续递归
       child.return = fiber;
       nextEffect = child;
     } else {
+      //不可以就进入完成阶段，完成时递归的归阶段
       commitBeforeMutationEffects_complete();
     }
   }
@@ -412,7 +414,7 @@ function commitBeforeMutationEffects_begin() {
 
 function commitBeforeMutationEffects_complete() {
   while (nextEffect !== null) {
-    //经典react递归试遍历，这里是遍历当前层级的fiber
+    //经典react递归式遍历，这里是遍历当前层级的fiber
     const fiber = nextEffect;
     setCurrentDebugFiberInDEV(fiber);
     try {
