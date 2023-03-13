@@ -631,7 +631,7 @@ function commitHookEffectListMount(flags: HookFlags, finishedWork: Fiber) {
   // effectList，专门存effect的
   // 但注意，某些情况下react喜欢把fiber叫做xxxEffect（比如nextEffect）
   // 也不知道是为什么
-  const updateQueue: FunctionComponentUpdateQueue | null = (finishedWork.updateQueue: any);/
+  const updateQueue: FunctionComponentUpdateQueue | null = (finishedWork.updateQueue: any);
   const lastEffect = updateQueue !== null ? updateQueue.lastEffect : null; //effectList的一环，存储副作用的
   // 遍历当前fiber上绑定的所有effects，effects由effectlist（链表结构）构建
   if (lastEffect !== null) {

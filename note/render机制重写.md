@@ -27,7 +27,7 @@ root是fiberRootNode的一层封装对象，这个对象包含一些重要的属
 比如_internalRoot属性，其指向了fiberRootNode
 这个fiberRootNode是整个应用的起点，可以理解为指向根组件(rootFiber)的根元素，这么说可能有点绕，可以看看这个图
 
-![rootFiber tree](E:\work_space\Technology_related\Front-end\MVVM\react\react\note\image\rootFiber tree.png)
+![rootFiber tree](/image/rootFiber tree.png)
 
 rootFiber是组件的根Fiber，而alternate指向的两个fiber树互为新旧fiber tree，这将用于diff算法的使用。
 
@@ -66,7 +66,7 @@ export const Deletion = /*                 */ 0b00000000001000;
 
 对于问题1
 ### flags标记如何做？
-在beginWork会根据不同的jsx元素的tag来创建不同的fiber,比如这里
+在render流程之初的beginWork会根据不同的jsx元素的tag来创建不同的fiber,比如这里
 
 ```javascript
      case REACT_ELEMENT_TYPE:
@@ -94,8 +94,8 @@ reconcileSingleElement会创建单一的元素Element
 ```
 可以重点关注 一下shouldTrackSideEffects这个全局变量，它会在uptate时被设置为true，mount时被设置为false
 可以再回顾一下上面的root Fiber tree图，在最开始rootFiber是走update流程
-所以它的child的flags会被设置为Placement
-而其他孙元素不会附上Placement。
+所以它的child（rootFiber）的flags会被设置为Placement
+而其他孙元素（也就是rootFiber的其他子元素）不会附上Placement。
 这就意味着，最终打上“请把这个fiber对应的dom插入到页面上”的只有rootFiber
 
 ## render流程
@@ -245,4 +245,4 @@ function recursivelyTraverseLayoutEffects(
     }
 ```
 #### 总结
-综上我们可以总结：对于函数试组件，react会递归的遍历其fiber子节点并调用其上的useLayoutEffect
+综上我们可以总结：对于函数试组件，react会递归·的遍历其fiber子节点并调用其上的useLayoutEffect
