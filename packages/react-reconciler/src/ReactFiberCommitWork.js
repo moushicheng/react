@@ -631,6 +631,7 @@ function commitHookEffectListMount(flags: HookFlags, finishedWork: Fiber) {
   // effectList，专门存effect的
   // 但注意，某些情况下react喜欢把fiber叫做xxxEffect（比如nextEffect）
   // 也不知道是为什么
+  // 现在知道了，这是为了区分即将执行effect操作的fiber，实际的efflist存储再这个fiber上的updateQueue
   const updateQueue: FunctionComponentUpdateQueue | null = (finishedWork.updateQueue: any);
   const lastEffect = updateQueue !== null ? updateQueue.lastEffect : null; //effectList的一环，存储副作用的
   // 遍历当前fiber上绑定的所有effects，effects由effectlist（链表结构）构建
@@ -2754,7 +2755,7 @@ function commitMutationEffectsOnFiber(
       return;
     }
     case HostRoot: {
-      recursivelyTraverseMutationEffects(root, finishedWork, lanes);
+      recursivelyTraverseMutationEffects(root, finishedWork, lanes); //卸载
       commitReconciliationEffects(finishedWork);
 
       if (flags & Update) {

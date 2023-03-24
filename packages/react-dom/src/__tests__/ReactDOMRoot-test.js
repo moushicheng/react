@@ -35,10 +35,10 @@ describe('ReactDOMRoot', () => {
   it('renders children', () => {
     const root = ReactDOMClient.createRoot(container);
     root.render(<div>
-      <h1>1</h1>
+      <h1>Hi</h1>
     </div>);
-    Scheduler.unstable_flushAll();
-    // expect(container.textContent).toEqual('Hi');
+  Scheduler.unstable_flushAll();
+    expect(container.textContent).toEqual('Hi');
   });
 
   it('warns if you import createRoot from react-dom', async () => {

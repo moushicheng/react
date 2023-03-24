@@ -1,4 +1,6 @@
 # react18渲染流程
+特殊原因，该笔记不继续维护，转而使用：
+[飞书](https://bytedance.feishu.cn/docx/YUbLdElyKohMGHxlTf6c6liwncc)
 ## test case
 ```javascript
   it('renders children', () => {
