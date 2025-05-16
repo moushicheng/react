@@ -74,6 +74,9 @@ import {
   pushEndInstance,
   pushSegmentFinale,
   getChildFormatContext,
+  getSuspenseFallbackFormatContext,
+  getSuspenseContentFormatContext,
+  getViewTransitionFormatContext,
   writeHoistables,
   writePreambleStart,
   writePreambleEnd,
@@ -138,6 +141,10 @@ import {
   callComponentInDEV,
   callRenderInDEV,
 } from './ReactFizzCallUserSpace';
+import {
+  getViewTransitionClassName,
+  getViewTransitionName,
+} from './ReactFizzViewTransitionComponent';
 
 import {resetOwnerStackLimit} from 'shared/ReactOwnerStackReset';
 import {
@@ -176,6 +183,7 @@ import {
 } from 'shared/ReactFeatureFlags';
 
 import assign from 'shared/assign';
+import noop from 'shared/noop';
 import getComponentNameFromType from 'shared/getComponentNameFromType';
 import isArray from 'shared/isArray';
 import {SuspenseException, getSuspendedThenable} from './ReactFizzThenable';
@@ -262,7 +270,6 @@ type RenderTask = {
   treeContext: TreeContext, // the current tree context that this task is executing in
   componentStack: null | ComponentStackNode, // stack frame description of the currently rendering component
   thenableState: null | ThenableState,
-  isFallback: boolean, // whether this task is rendering inside a fallback tree
   legacyContext: LegacyContext, // the current legacy context that this task is executing in
   debugTask: null | ConsoleTask, // DEV only
   // DON'T ANY MORE FIELDS. We at 16 already which otherwise requires converting to a constructor.
@@ -293,7 +300,6 @@ type ReplayTask = {
   treeContext: TreeContext, // the current tree context that this task is executing in
   componentStack: null | ComponentStackNode, // stack frame description of the currently rendering component
   thenableState: null | ThenableState,
-  isFallback: boolean, // whether this task is rendering inside a fallback tree
   legacyContext: LegacyContext, // the current legacy context that this task is executing in
   debugTask: null | ConsoleTask, // DEV only
   // DON'T ANY MORE FIELDS. We at 16 already which otherwise requires converting to a constructor.
@@ -404,7 +410,10 @@ function isEligibleForOutlining(
   request: Request,
   boundary: SuspenseBoundary,
 ): boolean {
-  return boundary.byteSize > request.progressiveChunkSize;
+  // For very small boundaries, don't bother producing a fallback for outlining.
+  // The larger this limit is, the more we can save on preparing fallbacks in case we end up
+  // outlining.
+  return boundary.byteSize > 500;
 }
 
 function defaultErrorHandler(error: mixed) {
@@ -421,8 +430,6 @@ function defaultErrorHandler(error: mixed) {
   }
   return null;
 }
-
-function noop(): void {}
 
 function RequestInstance(
   this: $FlowFixMe,
@@ -535,7 +542,6 @@ export function createRequest(
     rootContextSnapshot,
     emptyTreeContext,
     null,
-    false,
     emptyContextObject,
     null,
   );
@@ -641,7 +647,6 @@ export function resumeRequest(
       rootContextSnapshot,
       emptyTreeContext,
       null,
-      false,
       emptyContextObject,
       null,
     );
@@ -669,7 +674,6 @@ export function resumeRequest(
     rootContextSnapshot,
     emptyTreeContext,
     null,
-    false,
     emptyContextObject,
     null,
   );
@@ -779,7 +783,6 @@ function createRenderTask(
   context: ContextSnapshot,
   treeContext: TreeContext,
   componentStack: null | ComponentStackNode,
-  isFallback: boolean,
   legacyContext: LegacyContext,
   debugTask: null | ConsoleTask,
 ): RenderTask {
@@ -805,7 +808,6 @@ function createRenderTask(
     treeContext,
     componentStack,
     thenableState,
-    isFallback,
   }: any);
   if (!disableLegacyContext) {
     task.legacyContext = legacyContext;
@@ -831,7 +833,6 @@ function createReplayTask(
   context: ContextSnapshot,
   treeContext: TreeContext,
   componentStack: null | ComponentStackNode,
-  isFallback: boolean,
   legacyContext: LegacyContext,
   debugTask: null | ConsoleTask,
 ): ReplayTask {
@@ -858,7 +859,6 @@ function createReplayTask(
     treeContext,
     componentStack,
     thenableState,
-    isFallback,
   }: any);
   if (!disableLegacyContext) {
     task.legacyContext = legacyContext;
@@ -1144,12 +1144,15 @@ function renderSuspenseBoundary(
     // an already completed Suspense boundary. It's too late to do anything about it
     // so we can just render through it.
     const prevKeyPath = someTask.keyPath;
+    const prevContext = someTask.formatContext;
     someTask.keyPath = keyPath;
+    someTask.formatContext = getSuspenseContentFormatContext(prevContext);
     const content: ReactNodeList = props.children;
     try {
       renderNode(request, someTask, content, -1);
     } finally {
       someTask.keyPath = prevKeyPath;
+      someTask.formatContext = prevContext;
     }
     return;
   }
@@ -1157,6 +1160,7 @@ function renderSuspenseBoundary(
   const task: RenderTask = someTask;
 
   const prevKeyPath = task.keyPath;
+  const prevContext = task.formatContext;
   const parentBoundary = task.blockedBoundary;
   const parentPreamble = task.blockedPreamble;
   const parentHoistableState = task.hoistableState;
@@ -1235,6 +1239,7 @@ function renderSuspenseBoundary(
     task.blockedSegment = boundarySegment;
     task.blockedPreamble = newBoundary.fallbackPreamble;
     task.keyPath = fallbackKeyPath;
+    task.formatContext = getSuspenseFallbackFormatContext(prevContext);
     boundarySegment.status = RENDERING;
     try {
       renderNode(request, task, fallback, -1);
@@ -1257,6 +1262,7 @@ function renderSuspenseBoundary(
       task.blockedSegment = parentSegment;
       task.blockedPreamble = parentPreamble;
       task.keyPath = prevKeyPath;
+      task.formatContext = prevContext;
     }
 
     // We create a suspended task for the primary content because we want to allow
@@ -1272,11 +1278,10 @@ function renderSuspenseBoundary(
       newBoundary.contentState,
       task.abortSet,
       keyPath,
-      task.formatContext,
+      getSuspenseContentFormatContext(task.formatContext),
       task.context,
       task.treeContext,
       task.componentStack,
-      task.isFallback,
       !disableLegacyContext ? task.legacyContext : emptyContextObject,
       __DEV__ ? task.debugTask : null,
     );
@@ -1300,6 +1305,7 @@ function renderSuspenseBoundary(
     task.hoistableState = newBoundary.contentState;
     task.blockedSegment = contentRootSegment;
     task.keyPath = keyPath;
+    task.formatContext = getSuspenseContentFormatContext(prevContext);
     contentRootSegment.status = RENDERING;
 
     try {
@@ -1386,6 +1392,7 @@ function renderSuspenseBoundary(
       task.hoistableState = parentHoistableState;
       task.blockedSegment = parentSegment;
       task.keyPath = prevKeyPath;
+      task.formatContext = prevContext;
     }
 
     const fallbackKeyPath = [keyPath[0], 'Suspense Fallback', keyPath[2]];
@@ -1402,11 +1409,10 @@ function renderSuspenseBoundary(
       newBoundary.fallbackState,
       fallbackAbortSet,
       fallbackKeyPath,
-      task.formatContext,
+      getSuspenseFallbackFormatContext(task.formatContext),
       task.context,
       task.treeContext,
       task.componentStack,
-      true,
       !disableLegacyContext ? task.legacyContext : emptyContextObject,
       __DEV__ ? task.debugTask : null,
     );
@@ -1429,6 +1435,7 @@ function replaySuspenseBoundary(
   fallbackSlots: ResumeSlots,
 ): void {
   const prevKeyPath = task.keyPath;
+  const prevContext = task.formatContext;
   const previousReplaySet: ReplaySet = task.replay;
 
   const parentBoundary = task.blockedBoundary;
@@ -1464,6 +1471,7 @@ function replaySuspenseBoundary(
   task.blockedBoundary = resumedBoundary;
   task.hoistableState = resumedBoundary.contentState;
   task.keyPath = keyPath;
+  task.formatContext = getSuspenseContentFormatContext(prevContext);
   task.replay = {nodes: childNodes, slots: childSlots, pendingTasks: 1};
 
   try {
@@ -1539,6 +1547,7 @@ function replaySuspenseBoundary(
     task.hoistableState = parentHoistableState;
     task.replay = previousReplaySet;
     task.keyPath = prevKeyPath;
+    task.formatContext = prevContext;
   }
 
   const fallbackKeyPath = [keyPath[0], 'Suspense Fallback', keyPath[2]];
@@ -1560,11 +1569,10 @@ function replaySuspenseBoundary(
     resumedBoundary.fallbackState,
     fallbackAbortSet,
     fallbackKeyPath,
-    task.formatContext,
+    getSuspenseFallbackFormatContext(task.formatContext),
     task.context,
     task.treeContext,
     task.componentStack,
-    true,
     !disableLegacyContext ? task.legacyContext : emptyContextObject,
     __DEV__ ? task.debugTask : null,
   );
@@ -1606,7 +1614,6 @@ function renderPreamble(
     task.context,
     task.treeContext,
     task.componentStack,
-    task.isFallback,
     !disableLegacyContext ? task.legacyContext : emptyContextObject,
     __DEV__ ? task.debugTask : null,
   );
@@ -1651,7 +1658,6 @@ function renderHostElement(
       task.hoistableState,
       task.formatContext,
       segment.lastPushedText,
-      task.isFallback,
     );
     segment.lastPushedText = false;
     const prevContext = task.formatContext;
@@ -2269,7 +2275,23 @@ function renderViewTransition(
   keyPath: KeyNode,
   props: ViewTransitionProps,
 ) {
+  const prevContext = task.formatContext;
   const prevKeyPath = task.keyPath;
+  // Get the name off props or generate an auto-generated one in case we need it.
+  const autoName = getViewTransitionName(
+    props,
+    task.treeContext,
+    request.resumableState,
+  );
+  task.formatContext = getViewTransitionFormatContext(
+    prevContext,
+    getViewTransitionClassName(props.default, props.update),
+    getViewTransitionClassName(props.default, props.enter),
+    getViewTransitionClassName(props.default, props.exit),
+    getViewTransitionClassName(props.default, props.share),
+    props.name,
+    autoName,
+  );
   task.keyPath = keyPath;
   if (props.name != null && props.name !== 'auto') {
     renderNodeDestructive(request, task, props.children, -1);
@@ -2288,6 +2310,7 @@ function renderViewTransition(
     // because renderNode takes care of unwinding the stack.
     task.treeContext = prevTreeContext;
   }
+  task.formatContext = prevContext;
   task.keyPath = prevKeyPath;
 }
 
@@ -3493,7 +3516,6 @@ function spawnNewSuspendedReplayTask(
     task.context,
     task.treeContext,
     task.componentStack,
-    task.isFallback,
     !disableLegacyContext ? task.legacyContext : emptyContextObject,
     __DEV__ ? task.debugTask : null,
   );
@@ -3535,7 +3557,6 @@ function spawnNewSuspendedRenderTask(
     task.context,
     task.treeContext,
     task.componentStack,
-    task.isFallback,
     !disableLegacyContext ? task.legacyContext : emptyContextObject,
     __DEV__ ? task.debugTask : null,
   );
@@ -4314,6 +4335,7 @@ function finishedTask(
   boundary: Root | SuspenseBoundary,
   segment: null | Segment,
 ) {
+  request.allPendingTasks--;
   if (boundary === null) {
     if (segment !== null && segment.parentFlushed) {
       if (request.completedRootSegment !== null) {
@@ -4396,7 +4418,6 @@ function finishedTask(
     }
   }
 
-  request.allPendingTasks--;
   if (request.allPendingTasks === 0) {
     completeAll(request);
   }
@@ -4832,14 +4853,7 @@ function flushPreamble(
   preambleSegments: Array<Array<Segment>>,
 ) {
   // The preamble is ready.
-  const willFlushAllSegments =
-    request.allPendingTasks === 0 && request.trackedPostpones === null;
-  writePreambleStart(
-    destination,
-    request.resumableState,
-    request.renderState,
-    willFlushAllSegments,
-  );
+  writePreambleStart(destination, request.resumableState, request.renderState);
   for (let i = 0; i < preambleSegments.length; i++) {
     const segments = preambleSegments[i];
     for (let j = 0; j < segments.length; j++) {
@@ -4901,6 +4915,10 @@ function flushSubtree(
     }
   }
 }
+
+// Running count for how much bytes of boundaries have flushed inlined into the currently
+// flushing root or completed boundary.
+let flushedByteSize = 0;
 
 function flushSegment(
   request: Request,
@@ -4971,9 +4989,14 @@ function flushSegment(
     flushSubtree(request, destination, segment, hoistableState);
 
     return writeEndPendingSuspenseBoundary(destination, request.renderState);
-  } else if (isEligibleForOutlining(request, boundary)) {
-    // This boundary is large and will be emitted separately so that we can progressively show
-    // other content. We add it to the queue during the flush because we have to ensure that
+  } else if (
+    isEligibleForOutlining(request, boundary) &&
+    flushedByteSize + boundary.byteSize > request.progressiveChunkSize
+  ) {
+    // Inlining this boundary would make the current sequence being written too large
+    // and block the parent for too long. Instead, it will be emitted separately so that we
+    // can progressively show other content.
+    // We add it to the queue during the flush because we have to ensure that
     // the parent flushes first so that there's something to inject it into.
     // We also have to make sure that it's emitted into the queue in a deterministic slot.
     // I.e. we can't insert it here when it completes.
@@ -4999,6 +5022,8 @@ function flushSegment(
 
     return writeEndPendingSuspenseBoundary(destination, request.renderState);
   } else {
+    // We're inlining this boundary so its bytes get counted to the current running count.
+    flushedByteSize += boundary.byteSize;
     if (hoistableState) {
       hoistHoistables(hoistableState, boundary.contentState);
     }
@@ -5071,6 +5096,7 @@ function flushCompletedBoundary(
   destination: Destination,
   boundary: SuspenseBoundary,
 ): boolean {
+  flushedByteSize = boundary.byteSize; // Start counting bytes
   const completedSegments = boundary.completedSegments;
   let i = 0;
   for (; i < completedSegments.length; i++) {
@@ -5098,6 +5124,7 @@ function flushPartialBoundary(
   destination: Destination,
   boundary: SuspenseBoundary,
 ): boolean {
+  flushedByteSize = boundary.byteSize; // Start counting bytes
   const completedSegments = boundary.completedSegments;
   let i = 0;
   for (; i < completedSegments.length; i++) {
@@ -5191,6 +5218,8 @@ function flushCompletedQueues(
         return;
       }
 
+      flushedByteSize = request.byteSize; // Start counting bytes
+      // TODO: Count the size of the preamble chunks too.
       flushPreamble(
         request,
         destination,
@@ -5199,10 +5228,18 @@ function flushCompletedQueues(
       );
       flushSegment(request, destination, completedRootSegment, null);
       request.completedRootSegment = null;
+      const isComplete =
+        request.allPendingTasks === 0 &&
+        request.clientRenderedBoundaries.length === 0 &&
+        request.completedBoundaries.length === 0 &&
+        (request.trackedPostpones === null ||
+          (request.trackedPostpones.rootNodes.length === 0 &&
+            request.trackedPostpones.rootSlots === null));
       writeCompletedRoot(
         destination,
         request.resumableState,
         request.renderState,
+        isComplete,
       );
     }
 
@@ -5275,7 +5312,6 @@ function flushCompletedQueues(
   } finally {
     if (
       request.allPendingTasks === 0 &&
-      request.pingedTasks.length === 0 &&
       request.clientRenderedBoundaries.length === 0 &&
       request.completedBoundaries.length === 0
       // We don't need to check any partially completed segments because
