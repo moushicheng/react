@@ -120,7 +120,7 @@ function useId(): string {
   }
   const id = currentRequest.identifierCount++;
   // use 'S' for Flight components to distinguish from 'R' and 'r' in Fizz/Client
-  return ':' + currentRequest.identifierPrefix + 'S' + id.toString(32) + ':';
+  return '_' + currentRequest.identifierPrefix + 'S_' + id.toString(32) + '_';
 }
 
 function use<T>(usable: Usable<T>): T {
