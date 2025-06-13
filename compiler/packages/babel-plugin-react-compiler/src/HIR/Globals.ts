@@ -17,6 +17,7 @@ import {
   BuiltInSetId,
   BuiltInUseActionStateId,
   BuiltInUseContextHookId,
+  BuiltInUseEffectEventId,
   BuiltInUseEffectHookId,
   BuiltInUseInsertionEffectHookId,
   BuiltInUseLayoutEffectHookId,
@@ -25,6 +26,10 @@ import {
   BuiltInUseRefId,
   BuiltInUseStateId,
   BuiltInUseTransitionId,
+  BuiltInWeakMapId,
+  BuiltInWeakSetId,
+  BuiltinEffectEventId,
+  ReanimatedSharedValueId,
   ShapeRegistry,
   addFunction,
   addHook,
@@ -491,6 +496,38 @@ const TYPED_GLOBALS: Array<[string, BuiltInType]> = [
       true,
     ),
   ],
+  [
+    'WeakMap',
+    addFunction(
+      DEFAULT_SHAPES,
+      [],
+      {
+        positionalParams: [Effect.ConditionallyMutateIterator],
+        restParam: null,
+        returnType: {kind: 'Object', shapeId: BuiltInWeakMapId},
+        calleeEffect: Effect.Read,
+        returnValueKind: ValueKind.Mutable,
+      },
+      null,
+      true,
+    ),
+  ],
+  [
+    'WeakSet',
+    addFunction(
+      DEFAULT_SHAPES,
+      [],
+      {
+        positionalParams: [Effect.ConditionallyMutateIterator],
+        restParam: null,
+        returnType: {kind: 'Object', shapeId: BuiltInWeakSetId},
+        calleeEffect: Effect.Read,
+        returnValueKind: ValueKind.Mutable,
+      },
+      null,
+      true,
+    ),
+  ],
   // TODO: rest of Global objects
 ];
 
@@ -685,6 +722,27 @@ const REACT_APIS: Array<[string, BuiltInType]> = [
         returnValueKind: ValueKind.Frozen,
       },
       BuiltInFireId,
+    ),
+  ],
+  [
+    'useEffectEvent',
+    addHook(
+      DEFAULT_SHAPES,
+      {
+        positionalParams: [],
+        restParam: Effect.Freeze,
+        returnType: {
+          kind: 'Function',
+          return: {kind: 'Poly'},
+          shapeId: BuiltinEffectEventId,
+          isConstructor: false,
+        },
+        calleeEffect: Effect.Read,
+        hookKind: 'useEffectEvent',
+        // Frozen because it should not mutate any locally-bound values
+        returnValueKind: ValueKind.Frozen,
+      },
+      BuiltInUseEffectEventId,
     ),
   ],
 ];
@@ -908,7 +966,7 @@ export function getReanimatedModuleType(registry: ShapeRegistry): ObjectType {
       addHook(registry, {
         positionalParams: [],
         restParam: Effect.Freeze,
-        returnType: {kind: 'Poly'},
+        returnType: {kind: 'Object', shapeId: ReanimatedSharedValueId},
         returnValueKind: ValueKind.Mutable,
         noAlias: true,
         calleeEffect: Effect.Read,

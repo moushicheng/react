@@ -38,10 +38,8 @@ import {
   enablePersistedModeClonedFlag,
   enableProfilerTimer,
   enableTransitionTracing,
-  enableRenderableContext,
   passChildrenWhenCloningPersistedNodes,
   disableLegacyMode,
-  enableSiblingPrerendering,
   enableViewTransition,
   enableSuspenseyImages,
 } from 'shared/ReactFeatureFlags';
@@ -102,6 +100,7 @@ import {
   ShouldSuspendCommit,
   Cloned,
   ViewTransitionStatic,
+  Hydrate,
 } from './ReactFiberFlags';
 
 import {
@@ -110,6 +109,7 @@ import {
   resolveSingletonInstance,
   appendInitialChild,
   finalizeInitialChildren,
+  finalizeHydratedChildren,
   supportsMutation,
   supportsPersistence,
   supportsResources,
@@ -183,7 +183,7 @@ import {resetChildFibers} from './ReactChildFiber';
 import {createScopeInstance} from './ReactFiberScope';
 import {transferActualDuration} from './ReactProfilerTimer';
 import {popCacheProvider} from './ReactFiberCacheComponent';
-import {popTreeContext} from './ReactFiberTreeContext';
+import {popTreeContext, pushTreeFork} from './ReactFiberTreeContext';
 import {popRootTransition, popTransition} from './ReactFiberTransition';
 import {
   popMarkerInstance,
@@ -665,9 +665,7 @@ function scheduleRetryEffect(
 
     // Track the lanes that have been scheduled for an immediate retry so that
     // we can mark them as suspended upon committing the root.
-    if (enableSiblingPrerendering) {
-      markSpawnedRetryLane(retryLane);
-    }
+    markSpawnedRetryLane(retryLane);
   }
 }
 
@@ -1391,6 +1389,16 @@ function completeWork(
           // TODO: Move this and createInstance step into the beginPhase
           // to consolidate.
           prepareToHydrateHostInstance(workInProgress, currentHostContext);
+          if (
+            finalizeHydratedChildren(
+              workInProgress.stateNode,
+              type,
+              newProps,
+              currentHostContext,
+            )
+          ) {
+            workInProgress.flags |= Hydrate;
+          }
         } else {
           const rootContainerInstance = getRootHostContainer();
           const instance = createInstance(
@@ -1658,12 +1666,7 @@ function completeWork(
       return null;
     case ContextProvider:
       // Pop provider fiber
-      let context: ReactContext<any>;
-      if (enableRenderableContext) {
-        context = workInProgress.type;
-      } else {
-        context = workInProgress.type._context;
-      }
+      const context: ReactContext<any> = workInProgress.type;
       popProvider(context, workInProgress);
       bubbleProperties(workInProgress);
       return null;
@@ -1755,6 +1758,10 @@ function completeWork(
                     ForceSuspenseFallback,
                   ),
                 );
+                if (getIsHydrating()) {
+                  // Re-apply tree fork since we popped the tree fork context in the beginning of this function.
+                  pushTreeFork(workInProgress, renderState.treeForkCount);
+                }
                 // Don't bubble properties in this case.
                 return workInProgress.child;
               }
@@ -1881,6 +1888,10 @@ function completeWork(
         }
         pushSuspenseListContext(workInProgress, suspenseContext);
         // Do a pass over the next row.
+        if (getIsHydrating()) {
+          // Re-apply tree fork since we popped the tree fork context in the beginning of this function.
+          pushTreeFork(workInProgress, renderState.treeForkCount);
+        }
         // Don't bubble properties in this case.
         return next;
       }

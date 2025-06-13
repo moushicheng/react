@@ -24,9 +24,7 @@ export const {
   enableInfiniteRenderLoopDetection,
   enableNoCloningMemoCache,
   enableObjectFiber,
-  enableRenderableContext,
   enableRetryLaneExpiration,
-  enableSiblingPrerendering,
   enableTransitionTracing,
   enableTrustedTypesIntegration,
   favorSafetyOverHydrationPerf,
@@ -34,7 +32,6 @@ export const {
   retryLaneExpirationMs,
   syncLaneExpirationMs,
   transitionLaneExpirationMs,
-  enableFastAddPropertiesInDiffing,
   enableViewTransition,
   enableComponentPerformanceTrack,
   enableScrollEndPolyfill,
@@ -48,7 +45,6 @@ export const enableProfilerTimer = __PROFILE__;
 export const enableProfilerCommitHooks = __PROFILE__;
 export const enableProfilerNestedUpdatePhase = __PROFILE__;
 export const enableUpdaterTracking = __PROFILE__;
-export const enableFabricCompleteRootInCommitPhase = false;
 
 export const enableSuspenseAvoidThisFallback = true;
 
@@ -107,14 +103,17 @@ export const enableReactTestRendererWarning = false;
 
 export const disableLegacyMode = true;
 
-export const enableShallowPropDiffing = false;
+export const enableEagerAlternateStateNodeCleanup = true;
 
 export const enableLazyPublicInstanceInFabric = false;
 
 export const enableGestureTransition = false;
 
 export const enableSuspenseyImages = false;
+export const enableFizzBlockingRender = true;
 export const enableSrcObject = false;
+export const enableHydrationChangeEvent = false;
+export const enableDefaultTransitionIndicator = false;
 
 export const ownerStackLimit = 1e4;
 
